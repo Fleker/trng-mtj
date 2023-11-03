@@ -1,0 +1,895 @@
+diff --git a/add.c b/add.c
+new file mode 100644
+index 0000000000..af61ae1fb0
+--- /dev/null
++++ b/add.c
+@@ -0,0 +1,12 @@
++#include <stdint.h>
++
++int main(void)
++{
++    for (uint32_t i = 0; i < 1000; i++) {
++        uint32_t x = 5 + 6;
++        if (x != 11) {
++            return 1;
++        }
++    }
++    return 0;
++}
+\ No newline at end of file
+diff --git a/configs/learning_gem5/part1/riscv.py b/configs/learning_gem5/part1/riscv.py
+new file mode 100644
+index 0000000000..e17d6a3848
+--- /dev/null
++++ b/configs/learning_gem5/part1/riscv.py
+@@ -0,0 +1,119 @@
++# Copyright (c) 2015 Jason Power
++# All rights reserved.
++#
++# Redistribution and use in source and binary forms, with or without
++# modification, are permitted provided that the following conditions are
++# met: redistributions of source code must retain the above copyright
++# notice, this list of conditions and the following disclaimer;
++# redistributions in binary form must reproduce the above copyright
++# notice, this list of conditions and the following disclaimer in the
++# documentation and/or other materials provided with the distribution;
++# neither the name of the copyright holders nor the names of its
++# contributors may be used to endorse or promote products derived from
++# this software without specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++""" This file creates a barebones system and executes 'hello', a simple Hello
++World application.
++See Part 1, Chapter 2: Creating a simple configuration script in the
++learning_gem5 book for more information about this script.
++
++IMPORTANT: If you modify this file, it's likely that the Learning gem5 book
++           also needs to be updated. For now, email Jason <power.jg@gmail.com>
++
++This script uses the X86 ISA. `simple-arm.py` and `simple-riscv.py` may be
++referenced as examples of scripts which utilize the ARM and RISC-V ISAs
++respectively.
++
++"""
++
++# import the m5 (gem5) library created when gem5 is built
++import m5
++
++# import all of the SimObjects
++from m5.objects import *
++
++# create the system we are going to simulate
++system = System()
++
++# Set the clock frequency of the system (and all of its children)
++system.clk_domain = SrcClockDomain()
++system.clk_domain.clock = "1GHz"
++system.clk_domain.voltage_domain = VoltageDomain()
++
++# Set up the system
++system.mem_mode = "timing"  # Use timing accesses
++system.mem_ranges = [AddrRange("512MB")]  # Create an address range
++
++# Create a simple CPU
++# You can use ISA-specific CPU models for different workloads:
++# `RiscvTimingSimpleCPU`, `ArmTimingSimpleCPU`.
++system.cpu = RiscvTimingSimpleCPU()
++
++# Create a memory bus, a system crossbar, in this case
++system.membus = SystemXBar()
++
++# Hook the CPU ports up to the membus
++system.cpu.icache_port = system.membus.cpu_side_ports
++system.cpu.dcache_port = system.membus.cpu_side_ports
++
++# create the interrupt controller for the CPU and connect to the membus
++system.cpu.createInterruptController()
++
++# For X86 only we make sure the interrupts care connect to memory.
++# Note: these are directly connected to the memory bus and are not cached.
++# For other ISA you should remove the following three lines.
++system.cpu.interrupts[0].pio = system.membus.mem_side_ports
++system.cpu.interrupts[0].int_requestor = system.membus.cpu_side_ports
++system.cpu.interrupts[0].int_responder = system.membus.mem_side_ports
++
++# Create a DDR3 memory controller and connect it to the membus
++system.mem_ctrl = MemCtrl()
++system.mem_ctrl.dram = DDR3_1600_8x8()
++system.mem_ctrl.dram.range = system.mem_ranges[0]
++system.mem_ctrl.port = system.membus.mem_side_ports
++
++# Connect the system up to the membus
++system.system_port = system.membus.cpu_side_ports
++
++# Here we set the X86 "hello world" binary. With other ISAs you must specify
++# workloads compiled to those ISAs. Other "hello world" binaries for other ISAs
++# can be found in "tests/test-progs/hello".
++thispath = os.path.dirname(os.path.realpath(__file__))
++binary = os.path.join(
++    thispath,
++    "../../../",
++    "factorial.o",
++    # "tests/test-progs/hello/bin/x86/linux/hello",
++)
++
++system.workload = SEWorkload.init_compatible(binary)
++
++# Create a process for a simple "Hello World" application
++process = Process()
++# Set the command
++# cmd is a list which begins with the executable (like argv)
++process.cmd = [binary]
++# Set the cpu to use the process as its workload and create thread contexts
++system.cpu.workload = process
++system.cpu.createThreads()
++
++# set up the root SimObject and start the simulation
++root = Root(full_system=False, system=system)
++# instantiate all of the objects we've created above
++m5.instantiate()
++
++print("Beginning simulation!")
++exit_event = m5.simulate()
++print("Exiting @ tick %i because %s" % (m5.curTick(), exit_event.getCause()))
+diff --git a/configs/learning_gem5/part1/simple-riscv.py b/configs/learning_gem5/part1/simple-riscv.py
+index f05ca4ab50..d6e992c634 100644
+--- a/configs/learning_gem5/part1/simple-riscv.py
++++ b/configs/learning_gem5/part1/simple-riscv.py
+@@ -60,7 +60,9 @@ thispath = os.path.dirname(os.path.realpath(__file__))
+ binary = os.path.join(
+     thispath,
+     "../../../",
+-    "tests/test-progs/hello/bin/riscv/linux/hello",
++    "trng.o",
++
++    # "tests/test-progs/hello/bin/riscv/linux/hello",
+ )
+ 
+ system.workload = SEWorkload.init_compatible(binary)
+@@ -71,6 +73,7 @@ system.cpu.workload = process
+ system.cpu.createThreads()
+ 
+ root = Root(full_system=False, system=system)
++root.memlogic = MemLogic()
+ m5.instantiate()
+ 
+ print("Beginning simulation!")
+diff --git a/configs/learning_gem5/part1/simple.py b/configs/learning_gem5/part1/simple.py
+index e36cd78c8e..691147ad05 100644
+--- a/configs/learning_gem5/part1/simple.py
++++ b/configs/learning_gem5/part1/simple.py
+@@ -94,7 +94,8 @@ thispath = os.path.dirname(os.path.realpath(__file__))
+ binary = os.path.join(
+     thispath,
+     "../../../",
+-    "tests/test-progs/hello/bin/x86/linux/hello",
++    "factorial.o",
++    # "tests/test-progs/hello/bin/x86/linux/hello",
+ )
+ 
+ system.workload = SEWorkload.init_compatible(binary)
+diff --git a/implynvm.c b/implynvm.c
+new file mode 100644
+index 0000000000..9b9203cb29
+--- /dev/null
++++ b/implynvm.c
+@@ -0,0 +1,59 @@
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++// #include <stdlib.h>
++// #include <malloc.h>
++
++#define MEM_DDR4 1
++#define MEM_MTJ  2
++
++// Let's pretend this is a separate library
++#define MEM_DDR4_DELAY 0
++#define MEM_MTJ_DELAY  2
++
++#if MEM_KIND == MEM_DDR4
++void imply(bool* actual, bool p1, bool p2) {
++    *actual = !p1 | p2;
++}
++#else
++
++#if MEM_KIND == MEM_MTJ
++#define MEM_KIND_DELAY MEM_MTJ_DELAY
++#endif
++
++void imply(bool* actual, bool p1, bool p2) {
++    asm volatile("imply %0, %1, %2\n":"=r"(*actual):"r"(p1),"r"(p2):);
++    #if MEM_KIND_DELAY > 0
++    uint32_t i = MEM_KIND_DELAY;
++    while (i > 0) i--;
++    #endif
++}
++#endif
++
++// Program here
++
++#define ITERATIONS 1000
++int main(void)
++{
++    // char *string;
++    //  // Allocate space for a path name
++    // string = malloc( 100 );
++    // printf("String %s", string);
++    // free (string);
++    bool param1[] = {false, false, true, true};
++    bool param2[] = {false, true, false, true};
++    bool expect[] = {true, true, false, true};
++    for (uint32_t i = 0; i < ITERATIONS; i++) {
++        bool p1 = param1[i % 4];
++        bool p2 = param2[i % 4];
++        bool expected = expect[i % 4];
++        bool actual;
++        imply(&actual, p1, p2);
++        if (actual == expected) {
++            printf("Iteration %i pass\n", i);
++        } else {
++            printf("Iteration %i failed\n", i);
++        }
++    }
++    return 0;
++}
+\ No newline at end of file
+diff --git a/implyram.c b/implyram.c
+new file mode 100644
+index 0000000000..f550ad2a8b
+--- /dev/null
++++ b/implyram.c
+@@ -0,0 +1,23 @@
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++
++#define ITERATIONS 10
++int main(void)
++{
++    bool param1[] = {false, false, true, true};
++    bool param2[] = {false, true, false, true};
++    bool expect[] = {true, true, false, true};
++    for (uint32_t i = 0; i < ITERATIONS; i++) {
++        bool p1 = param1[i % 4];
++        bool p2 = param2[i % 4];
++        bool expected = expect[i % 4];
++        bool actual = !p1 || p2;
++        if (actual == expected) {
++            printf("Iteration %i pass", i);
++        } else {
++            printf("Iteration %i failed", i);
++        }
++    }
++    return 0;
++}
+\ No newline at end of file
+diff --git a/makefile b/makefile
+new file mode 100644
+index 0000000000..76e330f2f3
+--- /dev/null
++++ b/makefile
+@@ -0,0 +1,26 @@
++ram:
++	/opt/riscv/bin/riscv64-unknown-elf-gcc implynvm.c -DMEM_KIND=1 -o implynvm.o
++
++nvm:
++	/opt/riscv/bin/riscv64-unknown-elf-gcc implynvm.c -DMEM_KIND=2 -o implynvm.o
++
++trng-ddr:
++	/opt/riscv/bin/riscv64-unknown-elf-gcc -O0 trng.c -DMEM_KIND=1 -o trng.o
++
++trng-mtj:
++	/opt/riscv/bin/riscv64-unknown-elf-gcc -O0 trng.c -DMEM_KIND=2 -o trng.o
++
++xmul:
++	/opt/riscv/bin/riscv64-unknown-elf-gcc mul.c -o mul.o
++
++xadd:
++	/opt/riscv/bin/riscv64-unknown-elf-gcc add.c -o add.o
++
++xnickflip:
++	/opt/riscv/bin/riscv64-unknown-elf-gcc nickflip.c -o nickflip.o
++
++gem5-riscv:
++	scons build/RISCV/gem5.opt -j 8
++
++run-py:
++	build/RISCV/gem5.opt --debug-flags=MemLogic configs/learning_gem5/part1/simple-riscv.py
+diff --git a/mul.c b/mul.c
+new file mode 100644
+index 0000000000..edc1e1e709
+--- /dev/null
++++ b/mul.c
+@@ -0,0 +1,12 @@
++#include <stdint.h>
++
++int main(void)
++{
++    for (uint32_t i = 0; i < 1000; i++) {
++        uint32_t x = 5 * 6;
++        if (x != 30) {
++            return 1;
++        }
++    }
++    return 0;
++}
+\ No newline at end of file
+diff --git a/nickflip.c b/nickflip.c
+new file mode 100644
+index 0000000000..caa06cc27d
+--- /dev/null
++++ b/nickflip.c
+@@ -0,0 +1,23 @@
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++
++#define ITERATIONS 10
++int main(void)
++{
++    for (uint32_t i = 0; i < ITERATIONS; i++) {
++        bool p1 = false;
++        bool p2 = false;
++        uint32_t flipper;
++        // bool flipper;
++        asm volatile("nickflip %0, %1, %2\n":"=r"(flipper):"r"(p1),"r"(p2):);
++        printf("Iteration %i %i\n", i, flipper);
++        if (flipper) {
++            // printf("Iteration %i true\n", i);
++        } else {
++            // printf("Iteration %i false\n", i);
++            // printf("Iteration %i false\n", i);
++        }
++    }
++    return 0;
++}
+\ No newline at end of file
+diff --git a/src/arch/riscv/faults.cc b/src/arch/riscv/faults.cc
+index e609222b07..d98bb19c4d 100644
+--- a/src/arch/riscv/faults.cc
++++ b/src/arch/riscv/faults.cc
+@@ -185,6 +185,8 @@ void
+ UnknownInstFault::invokeSE(ThreadContext *tc, const StaticInstPtr &inst)
+ {
+     auto *rsi = static_cast<RiscvStaticInst *>(inst.get());
++    // DPRINTFS("Unknown inst %s", inst);
++    // DPRINTFS("Unknown rsi %s", rsi);
+     panic("Unknown instruction 0x%08x at pc %s", rsi->machInst,
+         tc->pcState());
+ }
+diff --git a/src/arch/riscv/isa/decoder.isa b/src/arch/riscv/isa/decoder.isa
+index c6b74ff44f..0a500be51a 100644
+--- a/src/arch/riscv/isa/decoder.isa
++++ b/src/arch/riscv/isa/decoder.isa
+@@ -646,6 +646,10 @@ decode QUADRANT default Unknown::unknown() {
+             }
+         }
+ 
++        0x0a: JOp::fact({{
++            Rd = Rd + 1;
++        }}, IsDirectControl, IsUncondControl);
++
+         0x09: decode FUNCT3 {
+             format Store {
+                 0x1: fsh({{
+@@ -673,6 +677,37 @@ decode QUADRANT default Unknown::unknown() {
+                     Mem_ud = Fs2_bits;
+                 }}, inst_flags=FloatMemWriteOp);
+             }
++
++            format ROp {
++                0x6: decode FUNCT7 {
++                    0x0: gcd({{
++                        Rd = Rs1 + Rs2; // Or some other C-lang impl
++                    }});
++                    0x1: imply({{
++                        // Rd = imply_abcd<32>(Rs1);
++                        Rd = !Rs1 | Rs2;
++                    }});
++                    0x3: AtomicMemOp::implythree({{
++                        Rd_sd = Mem_sw;
++                    }}, {{
++                        TypedAtomicOpFunctor<bool> *amo_op =
++                                new AtomicGenericOp<bool>(Rs2_uw,
++                                        [](bool* b, bool a){ });
++                    }}, mem_flags=ATOMIC_RETURN_OP);
++                    0x2: flip({{
++                        Rd = run_incr();
++                    }});
++                    0x4: trng_reset({{
++                        _sttMramTrng->reset(Rs1);
++                    }});
++                    0x5: trng_enable({{
++                        _sttMramTrng->enable();
++                    }});
++                    0x6: trng_read({{
++                        Rd = _sttMramTrng->read();
++                    }});
++                }
++            }
+         }
+ 
+         0x0b: decode FUNCT3 {
+@@ -1866,6 +1901,16 @@ decode QUADRANT default Unknown::unknown() {
+             }}, IsIndirectControl, IsUncondControl);
+         }
+ 
++        0x1A: decode FUNCT3 {
++            format ROp {
++                0x0: decode FUNCT7 {
++                    0x01: mod({{
++                        Rd = Rs1_sd % Rs2_sd;
++                    }});
++                }
++            }
++        }
++
+         0x1b: JOp::jal({{
+             Rd = NPC;
+             NPC = PC + imm;
+diff --git a/src/base/amo.hh b/src/base/amo.hh
+index 81bf069c50..4d41cc7619 100644
+--- a/src/base/amo.hh
++++ b/src/base/amo.hh
+@@ -52,6 +52,29 @@ struct AtomicOpFunctor
+     virtual ~AtomicOpFunctor() {}
+ };
+ 
++struct NvmOpFunctor
++{
++    /**
++     * @ingroup api_atomic_op
++     * @{
++     */
++    virtual void operator()(uint8_t *p) = 0;
++    virtual NvmOpFunctor* clone() = 0;
++    /** @} */ // end of api_atomic_op
++    virtual ~NvmOpFunctor() {}
++};
++
++template <class T>
++struct TypedNvmOpFunctor : public NvmOpFunctor
++{
++    void operator()(uint8_t *p) { execute((T *)p); }
++    virtual NvmOpFunctor* clone() = 0;
++    /**
++     * @ingroup api_atomic_op
++     */
++    virtual void execute(T * p) = 0;
++};
++
+ template <class T>
+ struct TypedAtomicOpFunctor : public AtomicOpFunctor
+ {
+diff --git a/src/base/bitfield.hh b/src/base/bitfield.hh
+index 288c5cabe9..b4e13b28ab 100644
+--- a/src/base/bitfield.hh
++++ b/src/base/bitfield.hh
+@@ -44,7 +44,11 @@
+ #include <cassert>
+ #include <cstddef>
+ #include <cstdint>
++#include <stdlib.h>
+ #include <type_traits>
++#include "base/trace.hh"
++
++#include "debug/MemLogic.hh"
+ 
+ namespace gem5
+ {
+@@ -131,6 +135,191 @@ sext(uint64_t val)
+     return val;
+ }
+ 
++/**
++ * Sign-extend an N-bit value to 64 bits. Assumes all bits past the sign are
++ * currently zero. For true sign extension regardless of the value of the sign
++ * bit, see szext.
++ *
++ * @ingroup api_bitfield
++ */
++template <int N>
++constexpr uint64_t
++imply_abcd(uint64_t val)
++{
++    uint32_t i = 1000;
++    while (i > 1000) {
++        i--;
++    }
++    return val + 1;
++}
++
++class MyFlipper
++{
++    public:
++        bool isFlipped;
++};
++
++static MyFlipper __myflip{};
++constexpr MyFlipper* _myflip = &__myflip;
++
++constexpr bool run_flipno() {
++  _myflip->isFlipped = !_myflip->isFlipped;
++  return _myflip->isFlipped;
++}
++
++class Memristor
++{
++    public:
++        bool isFlipped;
++        uint32_t counter;
++        void setCounter(uint32_t c) {
++            this->counter = c;
++        }
++};
++
++static Memristor __memristor{};
++constexpr Memristor* _memristor = &__memristor;
++
++constexpr bool run_flip() {
++  _memristor->isFlipped = !_memristor->isFlipped;
++  return _memristor->isFlipped;
++}
++
++constexpr uint32_t run_incr() {
++  _memristor->counter++;
++//   std::cout << "MemLogic RunInc" << _memristor->counter << std::endl;
++//   DPRINTF(MemLogic, "MemLogic RunInc %i\n", _memristor->counter);
++  return _memristor->counter;
++}
++
++static float C_HIGH = 20;
++static float C_LOW = 0;
++
++class Capacitor
++{
++    public:
++        uint32_t farads;
++        float coulombs;
++        Capacitor() {
++            // Default
++            this->farads = 50;
++        }
++        Capacitor(uint32_t farads) {
++            this->farads = farads;
++        }
++        void setCapacitance(float coulombs) {
++            if (coulombs < C_LOW) {
++                this->coulombs = C_LOW;
++            } else if (coulombs > C_HIGH) {
++                this->coulombs = C_HIGH;
++            } else {
++                this->coulombs = coulombs;
++            }
++        }
++        void charge(float volts) {
++            // V = Q/C
++            // V*C = Q
++            this->setCapacitance(volts * this->farads);
++        }
++        float getVoltage() {
++            // V = Q/C
++            return this->coulombs / this->farads;
++        }
++};
++
++static uint32_t R_HIGH = 100000;
++static uint32_t R_LOW = 1000;
++
++class SttMtj
++{
++    public:
++        uint32_t memristance;
++        uint32_t resistance;
++        SttMtj() {
++            // Default
++            this->memristance = 50;
++        }
++        SttMtj(uint32_t memristance) {
++            this->memristance = memristance;
++        }
++        void setResistance(uint32_t ohms) {
++            if (ohms < R_LOW) {
++                this->resistance = R_LOW;
++            } else if (ohms > R_HIGH) {
++                this->resistance = R_HIGH;
++            } else {
++                this->resistance = ohms;
++            }
++        }
++        void applyWrite(float volts) {
++            if (volts > 0) {
++                // Writing
++                // srand(time(NULL));
++                uint32_t prob = rand() % 100;
++                if (prob < this->memristance) {
++                    this->setResistance(R_HIGH);
++                } else {
++                    this->setResistance(R_LOW);
++                }
++            }
++        }
++        bool read() {
++            uint32_t middleLine = (R_HIGH - R_LOW) / 2;
++            if (this->resistance > middleLine) {
++                return true;
++            }
++            return false;
++        }
++};
++
++static uint32_t memristances[] = {
++    30, 40, 87, 70, 24, 13, 92, 51, //  8
++     1, 68, 84, 22, 35, 18, 43, 77, // 16
++    20, 30, 40, 19, 51, 62, 98, 44, // 24
++    18, 64, 37, 59, 21, 45, 82, 93, // 32
++};
++
++#define MEMSIZE 32
++
++class SttMramTrng
++{
++    public:
++        Capacitor cap;
++        SttMtj row[MEMSIZE]; // FIXME
++        uint32_t length;
++        SttMramTrng(uint32_t n) {
++            this->cap = Capacitor(50);
++            this->length = n;
++            for (uint32_t i = 0; i < n; i++) {
++                row[i] = SttMtj(memristances[i]);
++            }
++        }
++        void reset(uint32_t seed) {
++            srand(seed);
++            this->cap.charge(5.0); // 5v
++        }
++        void enable() {
++            for (uint32_t i = 0; i < this->length; i++) {
++                this->row[i].applyWrite(5.0); // 5v
++            }
++        }
++        uint32_t read() {
++            uint32_t random = 0;
++            for (uint32_t i = 0; i < this->length; i++) {
++                // // Read each cell in a row to get final out.
++                random = random << 1;
++                if (this->row[i].read()) {
++                    random |= 1;
++                }
++            }
++            return random;
++        }
++};
++
++// uint32_t rowLength = sizeof(memristances) / sizeof(memristances[0]);
++static SttMramTrng __sttMramTrng(MEMSIZE); // FIXME tie to array
++constexpr SttMramTrng* _sttMramTrng = &__sttMramTrng;
++
+ /**
+  * Sign-extend an N-bit value to 64 bits. Zero any bits past the sign if
+  * necessary.
+diff --git a/src/mem/MemLogic.py b/src/mem/MemLogic.py
+new file mode 100644
+index 0000000000..262638648b
+--- /dev/null
++++ b/src/mem/MemLogic.py
+@@ -0,0 +1,7 @@
++from m5.params import *
++from m5.SimObject import SimObject
++
++class MemLogic(SimObject):
++    type = "MemLogic"
++    cxx_header = "mem/mem_logic.hh"
++    cxx_class = "gem5::MemLogic"
+diff --git a/src/mem/SConscript b/src/mem/SConscript
+index 3bcfc0d9c5..c6f585c222 100644
+--- a/src/mem/SConscript
++++ b/src/mem/SConscript
+@@ -157,3 +157,7 @@ DebugFlag('TokenPort')
+ DebugFlag("MemChecker")
+ DebugFlag("MemCheckerMonitor")
+ DebugFlag("QOS")
++
++SimObject("MemLogic.py", sim_objects=["MemLogic"])
++Source("mem_logic.cc")
++DebugFlag("MemLogic")
+diff --git a/src/mem/mem_logic.cc b/src/mem/mem_logic.cc
+new file mode 100644
+index 0000000000..54602ad8c5
+--- /dev/null
++++ b/src/mem/mem_logic.cc
+@@ -0,0 +1,26 @@
++#include "mem/mem_logic.hh"
++#include "base/bitfield.hh"
++#include "base/trace.hh"
++#include "debug/MemLogic.hh"
++
++#include <iostream>
++
++namespace gem5
++{
++
++MemLogic::MemLogic(const MemLogicParams &params) :
++    SimObject(params)
++{
++    // __memristor.isFlipped = true;
++    // __memristor.counter = 10;
++    _memristor->isFlipped = true;
++    _memristor->setCounter(55);
++    DPRINTF(MemLogic, "MemLogic Counter %i\n", _memristor->counter);
++}
++
++MemLogic::~MemLogic()
++{
++    DPRINTF(MemLogic, "MemLogic Counter %i\n", __memristor.counter);
++}
++
++}
+diff --git a/src/mem/mem_logic.hh b/src/mem/mem_logic.hh
+new file mode 100644
+index 0000000000..92741cdad3
+--- /dev/null
++++ b/src/mem/mem_logic.hh
+@@ -0,0 +1,19 @@
++#ifndef __FELKER_MEM_LOGIC_HH
++#define __FELKER_MEM_LOGIC_HH
++
++#include "params/MemLogic.hh"
++#include "sim/sim_object.hh"
++
++namespace gem5
++{
++
++class MemLogic : public SimObject
++{
++  public:
++    MemLogic(const MemLogicParams &p);
++    ~MemLogic();
++};
++
++} // namespace gem5
++
++#endif
+\ No newline at end of file
+diff --git a/trng.c b/trng.c
+new file mode 100644
+index 0000000000..89a771674d
+--- /dev/null
++++ b/trng.c
+@@ -0,0 +1,123 @@
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++
++#define MEM_DDR4 1
++#define MEM_MTJ  2
++
++char scrambleChars[] = {
++    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',  //  8
++    'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',  // 16
++    'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',  // 24
++    'Y', 'Z', '0', '1', '2', '3', '4', '5',  // 32
++    '6', '7', '8', '9', ' ', '-', '_', '=',  // 40
++    '!', '?', '.', ',', '<', '>', '/', '@',  // 48
++    '#', '$', '%', '^', '&', '*', '(', ')',  // 56
++    '`', '~', '[', ']', '{', '}', '|', ':',  // 64
++};
++
++#if MEM_KIND == MEM_DDR4
++void scramble(char msg[], char output[], uint32_t length) {
++    for (uint32_t i = 0; i < length; i++) {
++        srand(i * 100000 + msg[i]);
++        uint32_t randIndex = rand();
++        // printf("%i\n",randIndex);
++        output[i] = scrambleChars[randIndex % 64];
++        printf("Scramble char %i: %c -%i-> %c\n", i, msg[i], randIndex, output[i]);
++    }
++}
++#endif
++
++#if MEM_KIND == MEM_MTJ
++uint32_t truerandom(uint32_t* rng, uint32_t seed) {
++    uint32_t p1 = seed;
++    uint32_t p2 = 0;
++    asm volatile("trng.reset %0, %1, %2\n":"=r"(*rng):"r"(p1),"r"(p2):);
++    asm volatile("trng.enable %0, %1, %2\n":"=r"(*rng):"r"(p1),"r"(p2):);
++    asm volatile("trng.read %0, %1, %2\n":"=r"(*rng):"r"(p1),"r"(p2):);
++}
++
++void scramble(char msg[], char output[], uint32_t length) {
++    for (uint32_t i = 0; i < length; i++) {
++        uint32_t randIndex;
++                // srand(i * 100000 + msg[i]);
++        // uint32_t randIndex = rand();
++        truerandom(&randIndex, i * 100000 + msg[i]);
++        // printf("%i\n",randIndex);
++                // uint32_t randIndex = rand();
++        output[i] = scrambleChars[randIndex % 64];
++        printf("Scramble char %i: %c -%i-> %c\n", i, msg[i], randIndex, output[i]);
++    }
++}
++#endif
++
++void getSecret(char msg[], char output[], uint32_t length) {
++    #if MEM_KIND == MEM_DDR4
++    char hashedSecret[] = "}0TPSTKFJ&G";
++    #endif
++    #if MEM_KIND == MEM_MTJ
++    char hashedSecret[] = "BN,?9?==$9A";
++    #endif
++    char pwd[] = "MYPWD";
++    char noMatch[] = "ERROR";
++    if (strcmp(msg, hashedSecret) == 0) {
++        for (uint32_t i = 0; i < length; i++) {
++            output[i] = pwd[i];
++        }
++    } else {
++        // No match
++        for (uint32_t i = 0; i < length; i++) {
++            output[i] = noMatch[i];
++        }
++    }
++}
++
++#define ITERATIONS 5
++int main(void)
++{
++    // srand(1000);
++    /*
++    for (uint32_t i = 0; i < ITERATIONS; i++) {
++        #if MEM_KIND == MEM_DDR4
++        srand(i * 100000 + i);
++        uint32_t rng = rand();
++        #endif
++
++        #if MEM_KIND == MEM_MTJ
++        uint32_t rng;
++        truerandom(&rng, i * 100000 + i); // yo
++        #endif
++
++        // printf("Iteration %i %i\n", i, rng);
++        printf("%i\n",rng);
++    }
++    */
++
++    for (uint32_t i = 0; i < ITERATIONS; i++) {
++    char in[] = "Hello World";
++    char out[11];
++    scramble(in, out, 11);
++    printf("Scramble msg %s\n", out);
++    }
++
++/*
++    char userInputPwd[] = "Hello World";
++    char hashInputPwd[11];
++    scramble(userInputPwd, hashInputPwd, 11);
++    char outputPwd[5];
++    getSecret(hashInputPwd, outputPwd, 5);
++    printf("Scramble msg %s\n", hashInputPwd);
++    printf("Secure enclave returned: %s\n", outputPwd);
++
++    char userInputPwd2[] = "BadPassword";
++    char hashInputPwd2[11];
++    scramble(userInputPwd2, hashInputPwd2, 11);
++    char outputPwd2[5];
++    getSecret(hashInputPwd2, outputPwd2, 5);
++    printf("Scramble msg %s\n", hashInputPwd2);
++    printf("Secure enclave returned: %s\n", outputPwd2);
++    */
++    return 0;
++}

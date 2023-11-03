@@ -1,0 +1,64 @@
+diff --git a/factorial.c b/factorial.c
+new file mode 100644
+index 0000000..2859299
+--- /dev/null
++++ b/factorial.c
+@@ -0,0 +1,17 @@
++#include <stdint.h>
++#include <stdio.h>
++
++#define FACT_DIGITS 10000
++int main(void)
++{
++uint32_t num1 = 3, num2 = 5, gcd = 0;
++uint32_t fact_test_val = 10;
++uint32_t fact_result_ptr; 
++uint8_t fact_result[FACT_DIGITS];
++fact_result_ptr = (uint64_t)fact_result;
++asm volatile("gcd %0, %1,%2\n":"=r"(gcd):"r"(num1),"r"(num2):);
++asm volatile("fact %0, %1\n":"=r"(fact_result_ptr):"i"(250):);
++printf("\nGCD is %i\n", gcd);
++printf("FACT is %i\n", fact_result_ptr);
++return 0;
++}
+\ No newline at end of file
+diff --git a/factorial2.c b/factorial2.c
+new file mode 100644
+index 0000000..a084949
+--- /dev/null
++++ b/factorial2.c
+@@ -0,0 +1,8 @@
++#include <stdint.h>
++int main(void)
++{
++uint32_t fact_result_ptr; 
++//suppose we want to compute the factorial of 125 so immediate=250
++asm volatile("fact %0, %1\n":"=r"(fact_result_ptr):"i"(-8):); 
++return 0;
++}
+\ No newline at end of file
+diff --git a/modulus.c b/modulus.c
+new file mode 100644
+index 0000000..f0377c3
+--- /dev/null
++++ b/modulus.c
+@@ -0,0 +1,18 @@
++#include <stdio.h>
++int main(){
++    int a,b,c;
++    a = 5;
++    b = 2;
++    asm volatile
++    (
++    "mod   %[z], %[x], %[y]\n\t"
++    : [z] "=r" (c)
++    : [x] "r" (a), [y] "r" (b)
++    );
++    if ( c != 1 ){
++            printf("\n[[FAILED]]\n");
++            return -1;
++    }
++    printf("\n[[PASSED]]\n");
++    return 0;
++}
+\ No newline at end of file

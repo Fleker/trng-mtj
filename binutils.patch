@@ -1,0 +1,62 @@
+diff --git a/include/opcode/riscv-opc.h b/include/opcode/riscv-opc.h
+index 85d35c1efc9..dc84b6b8a87 100644
+--- a/include/opcode/riscv-opc.h
++++ b/include/opcode/riscv-opc.h
+@@ -2342,6 +2342,22 @@
+ #define MASK_TH_SYNC_IS 0xffffffff
+ #define MATCH_TH_SYNC_S 0x0190000b
+ #define MASK_TH_SYNC_S 0xffffffff
++#define MATCH_GCD 0x6027
++#define MASK_GCD 0xfe00707f
++#define MATCH_FACT 0x2b
++#define MASK_FACT 0x7f
++#define MATCH_MOD 0x200006b
++#define MASK_MOD 0xfe00707f
++#define MATCH_IMPLY 0x2006027
++#define MASK_IMPLY 0xfe00707f
++#define MATCH_FLIP 0x4006027
++#define MASK_FLIP 0xfe00707f
++#define MATCH_TRNGRESET 0x8006027
++#define MASK_TRNGRESET 0xfe00707f
++#define MATCH_TRNGENABLE 0xA006027
++#define MASK_TRNGENABLE 0xfe00707f
++#define MATCH_TRNGREAD 0xC006027
++#define MASK_TRNGREAD 0xfe00707f
+ /* Unprivileged Counter/Timers CSR addresses.  */
+ #define CSR_CYCLE 0xc00
+ #define CSR_TIME 0xc01
+@@ -3236,6 +3252,14 @@ DECLARE_INSN(th_sync, MATCH_TH_SYNC, MASK_TH_SYNC)
+ DECLARE_INSN(th_sync_i, MATCH_TH_SYNC_I, MASK_TH_SYNC_I)
+ DECLARE_INSN(th_sync_is, MATCH_TH_SYNC_IS, MASK_TH_SYNC_IS)
+ DECLARE_INSN(th_sync_s, MATCH_TH_SYNC_S, MASK_TH_SYNC_S)
++DECLARE_INSN(mod, MATCH_MOD, MASK_MOD)
++DECLARE_INSN(gcd, MATCH_GCD, MASK_GCD)
++DECLARE_INSN(fact, MATCH_FACT, MASK_FACT)
++DECLARE_INSN(imply, MATCH_IMPLY, MASK_IMPLY)
++DECLARE_INSN(flip, MATCH_FLIP, MASK_FLIP)
++DECLARE_INSN(trng_reset, MATCH_TRNGRESET, MASK_TRNGRESET)
++DECLARE_INSN(trng_enable, MATCH_TRNGENABLE, MASK_TRNGENABLE)
++DECLARE_INSN(trng_read, MATCH_TRNGREAD, MASK_TRNGREAD)
+ #endif /* DECLARE_INSN */
+ #ifdef DECLARE_CSR
+ /* Unprivileged Counter/Timers CSRs.  */
+diff --git a/opcodes/riscv-opc.c b/opcodes/riscv-opc.c
+index f67375f10a9..4a77f688806 100644
+--- a/opcodes/riscv-opc.c
++++ b/opcodes/riscv-opc.c
+@@ -2009,6 +2009,15 @@ const struct riscv_opcode riscv_opcodes[] =
+ {"th.sync.is",       0, INSN_CLASS_XTHEADSYNC,  "",   MATCH_TH_SYNC_IS,       MASK_TH_SYNC_IS,       match_opcode, 0},
+ {"th.sync.s",        0, INSN_CLASS_XTHEADSYNC,  "",   MATCH_TH_SYNC_S,        MASK_TH_SYNC_S,        match_opcode, 0},
+ 
++{"mod",      0, INSN_CLASS_I,       "d,s,t",         MATCH_MOD, MASK_MOD, match_opcode, 0 },
++{"gcd",      0, INSN_CLASS_I,       "d,s,t",         MATCH_GCD, MASK_GCD, match_opcode, 0 },
++{"fact",      0, INSN_CLASS_I,       "d,a",         MATCH_FACT, MASK_FACT, match_opcode, 0 },
++{"imply",      0, INSN_CLASS_I,       "d,s,t",         MATCH_IMPLY, MASK_IMPLY, match_opcode, 0 },
++{"flip",      0, INSN_CLASS_I,       "d,s,t",         MATCH_FLIP, MASK_FLIP, match_opcode, 0 },
++{"trng.reset",      0, INSN_CLASS_I,       "d,s,t",         MATCH_TRNGRESET, MASK_TRNGRESET, match_opcode, 0 },
++{"trng.enable",      0, INSN_CLASS_I,       "d,s,t",         MATCH_TRNGENABLE, MASK_TRNGENABLE, match_opcode, 0 },
++{"trng.read",      0, INSN_CLASS_I,       "d,s,t",         MATCH_TRNGREAD, MASK_TRNGREAD, match_opcode, 0 },
++
+ /* Terminate the list.  */
+ {0, 0, INSN_CLASS_NONE, 0, 0, 0, 0, 0}
+ };
